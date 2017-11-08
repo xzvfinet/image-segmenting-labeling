@@ -14,7 +14,7 @@ for (var i = 0; i < colors.length; ++i) {
     var pa = new Path.Rectangle({
         center: [70, 25 + 20 * i],
         size: [10, 10],
-        fillColor: colors[i] + new Color(0,0,0,0.5)
+        fillColor: colors[i] + new Color(0, 0, 0, 0.5)
     });
 }
 
@@ -35,11 +35,11 @@ function onMouseDown(event) {
             currentPath.selected = false;
         }
 
-		// new Color(currentColor) - new Color(0,0,0,0.5);
+        // new Color(currentColor) - new Color(0,0,0,0.5);
         currentPath = new Path({
             segments: [event.point],
-            strokeColor: currentColor + new Color(0,0,0,0.2),
-            strokeWidth: 5,
+            strokeColor: currentColor + new Color(0, 0, 0, 0.2),
+            strokeWidth: 3,
             fullySelected: true
         });
 
@@ -54,12 +54,14 @@ function onMouseDown(event) {
         currentPath = hitResult.item;
         currentPath.selected = true;
     } else {
+        console.log(hitResult.item);
+
         if (currentPath) {
             currentPath.selected = false;
         }
         currentPath = null;
 
-        currentColor = hitResult.item.fillColor - new Color(0,0,0,0.5);
+        currentColor = hitResult.item.fillColor - new Color(0, 0, 0, 0.5);
     }
 }
 
@@ -122,7 +124,8 @@ $(document).keydown(function(e) {
             case 40: // down
                 currentPath.position += new Point(0, 5);
                 break;
-            case 46:
+            case 8: // macOS
+            case 46: // Windows
                 if (currentPath) {
                     currentPath.remove();
                 }
@@ -135,25 +138,21 @@ $(document).keydown(function(e) {
     // e.preventDefault(); // prevent the default action (scroll / move caret)
 });
 
-function downloadDataUri(options) {
-    if (!options.url)
-        options.url = "http://download-data-uri.appspot.com/";
-    $('<form method="post" action="' + options.url +
-        '" style="display:none"><input type="hidden" name="filename" value="' +
-        options.filename + '"/><input type="hidden" name="data" value="' +
-        options.data + '"/></form>').appendTo('body').submit().remove();
-}
+$('#remove-button').click(function() {
+    if (currentPath) {
+        currentPath.remove();
+    }
+});
 
 $('#export-button').click(function() {
     console.log(project._children[0]._children);
-    project._children[0]._children.forEach(function (el, i) {
-    	if (el.constructor == Path && el.selectable) {
-    		el.fillColor.alpha = 1;
-    		el.strokeColor.alpha = 1;
-    	}
-    	else {
-    		el.visible = false;
-    	}
+    project._children[0]._children.forEach(function(el, i) {
+        if (el.constructor == Path && el.selectable) {
+            el.fillColor.alpha = 1;
+            el.strokeColor.alpha = 1;
+        } else {
+            el.visible = false;
+        }
     });
 
     var svg = project.exportSVG({ asString: true });
@@ -164,8 +163,63 @@ $('#export-button').click(function() {
     });
 });
 
-$('#remove-button').click(function() {
-    if (path) {
-        path.remove();
-    }
-});
+$('#save-button').click(function() {
+    unselect();
+
+    var jsonString = addSelectable(project.exportJSON());
+
+    downloadDataUri({
+        data: 'data:application/json,' + encodeURIComponent(jsonString),
+        filename: 'save.json'
+    });
+})
+
+$('#selectedFile')[0].onchange = function(event) {
+    var reader = new FileReader();
+    reader.onload = onReaderLoad;
+    reader.readAsText(event.target.files[0]);
+}
+
+function onReaderLoad(event) {
+    //alert(event.target.result);
+    // console.log(event.target.result);
+    var obj = JSON.parse(event.target.result);
+
+    getFirstLayerChildren(obj).forEach(function(el, i) {
+        if (el[1].selectable) {
+            project._children[0]._children[i].selectable = el[1].selectable;
+        }
+    });
+}
+
+function downloadDataUri(options) {
+    if (!options.url)
+        options.url = "https://download-data-uri.appspot.com/";
+    $('<form method="post" action="' + options.url +
+        '" style="display:none"><input type="hidden" name="filename" value="' +
+        options.filename + '"/><input type="hidden" name="data" value="' +
+        options.data + '"/></form>').appendTo('body').submit().remove();
+}
+
+function getFirstLayerChildren(obj) {
+    return obj[0][1].children;
+}
+
+function unselect() {
+    project._children[0]._children.forEach(function(el, i) {
+        if (el.constructor == Path && el.selectable) {
+            el.selected = false;
+        }
+    });
+}
+
+function addSelectable(jsonString) {
+    var jsonString = project.exportJSON();
+    var jsonObject = JSON.parse(jsonString);
+    jsonObject[0][1].children.forEach(function(el) {
+        if (el[0] == "Path") {
+            el[1].selectable = true;
+        }
+    });
+    return JSON.stringify(jsonObject);
+}
