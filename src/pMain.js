@@ -230,8 +230,10 @@ function unselect(item) {
 
 function select(item) {
 	unselect();
-	currentPath = item;
-	currentPath.selected = true;
+	if (item.selectable) {
+		currentPath = item;
+		currentPath.selected = true;	
+	}
 }
 
 function unselectAll() {
