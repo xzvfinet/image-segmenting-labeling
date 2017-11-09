@@ -160,9 +160,12 @@ $('#export-button').unbind('click').bind('click', function() {
 	var svg = project.exportSVG({
 		bounds: new Rectangle(a.left, a.top, b, c)
 	});
+	var ratio = img.naturalWidth/svg.getAttribute('width');
+
 	svg.setAttribute('width', img.naturalWidth);
 	svg.setAttribute('height', img.naturalHeight);
 
+	svg.setAttribute("transform", "scale(" + ratio + ")");
 	var svgString = new XMLSerializer().serializeToString(svg);
 
 	downloadDataUri({
