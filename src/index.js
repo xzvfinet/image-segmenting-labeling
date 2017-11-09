@@ -1,4 +1,4 @@
 window.onload = function() {
-    var canvas = document.getElementById("mainCanvas");
-    console.log(canvas)
+	var canvas = document.getElementById("mainCanvas");
+	console.log(canvas)
 }
