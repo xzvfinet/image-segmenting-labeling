@@ -1,26 +1,35 @@
-var colors = [
-	new Color(getRandomColor(0.5)),
-	new Color(getRandomColor(0.5)),
-	new Color(getRandomColor(0.5)),
-	new Color(getRandomColor(0.5))
-];
+var background = new Raster('static/img/4.jpg');
+background.position = view.center;
 
-for (var i = 0; i < colors.length; ++i) {
+var canvas = document.getElementById("mainCanvas");
+
+var LABEL_NUM = 4;
+var palettes = [];
+var labels = [];
+
+for (var i = 0; i < LABEL_NUM; ++i) {
+	var color = new Color(getRandomColor());
+
+	// label
 	var textItem = new PointText({
 		content: 'Label' + i + ':',
 		point: new Point(20, 60 + 20 * i),
 		fillColor: 'black',
 	});
+	labels.push(textItem);
+
+	// palette
 	var pa = new Path.Rectangle({
 		center: [70, 55 + 20 * i],
 		size: [10, 10],
-		fillColor: colors[i] + new Color(0, 0, 0, 0.5)
+		fillColor: color
 	});
 	pa.selectable = false;
+	palettes.push(pa);
 }
 
 var currentPath;
-var currentColor = colors[0];
+var currentColor = palettes[0].fillColor - new Color(0, 0, 0, 0.5);
 
 var hitOptions = {
 	segments: true,
@@ -29,25 +38,19 @@ var hitOptions = {
 	tolerance: 5
 };
 
-function onPathMouseDown(event) {
-	select(this);
+window.setBackground = function(url) {
+	background.remove();
+	background = new Raster(url);
+	background.sendToBack();
 }
 
-function onPathMouseDrag(event) {
-	if (currentPath == this) {
-		if (this.selected) {
-			this.position += event.delta;
-		}
-	}
-}
+view.onMouseDown = function(event) {
+	console.log("view");
 
-function onMouseDown(event) {
 	var hitResult = project.hitTest(event.point, hitOptions);
-	if (!hitResult) {
-		if (currentPath) {
-			currentPath.selected = false;
-		}
 
+	if (!hitResult || hitResult.item == background) {
+		unselect();
 		currentPath = new Path({
 			segments: [event.point],
 			strokeColor: currentColor + new Color(0, 0, 0, 0.2),
@@ -59,42 +62,54 @@ function onMouseDown(event) {
 
 		currentPath.onMouseDown = onPathMouseDown;
 		currentPath.onMouseDrag = onPathMouseDrag;
+		return;
 	} else if (hitResult.item.selectable) {
-		if (currentPath) {
-			currentPath.selected = false;
-		}
-		currentPath = hitResult.item;
-		currentPath.selected = true;
+		// currentPath = hitResult.item;
 	} else {
-		if (currentPath) {
-			currentPath.selected = false;
-		}
-		currentPath = null;
-
 		currentColor = hitResult.item.fillColor - new Color(0, 0, 0, 0.5);
 	}
 }
 
-function onMouseDrag(event) {
+view.onMouseDrag = function(event) {
+	// view.translatet([100, 0]);
 	if (currentPath) {
 		if (!currentPath.selected) {
 			currentPath.add(event.point);
+
 		}
 	}
 }
 
-function onMouseUp(event) {
+view.onMouseUp = function(event) {
 	if (currentPath) {
 		if (!currentPath.selected) {
-			currentPath.closed = true;
-			currentPath.fillColor = currentColor;
 			currentPath.simplify();
+			currentPath.closed = true;
+			currentPath.fillColor = new Color(currentColor); // for deep copy
 			if (currentPath.segments.length == 1) {
 				currentPath.remove();
 			}
 		}
 
 		select(currentPath);
+	}
+}
+
+function onPathMouseDown(event) {
+	console.log("path");
+	select(this);
+	// event.stopPropagation();
+
+}
+
+function onPathMouseDrag(event) {
+	if (currentPath == this) {
+		if (this.selected) {
+			this.position += event.delta;
+			// event.stopPropagation();
+			// event.stop();
+			// return false;
+		}
 	}
 }
 
@@ -139,10 +154,17 @@ $('#remove-button').click(function() {
 
 
 $('#export-button').unbind('click').bind('click', function() {
-	unselect();
+	unselectAll();
+
+	background.remove();
+	palettes.forEach(function(el) { el.remove(); });
+	labels.forEach(function(el) { el.remove(); })
 
 	var backupLayer = project._children[0].clone({ "insert": false });
+	addSelectableToLayer(backupLayer);
+	console.log(backupLayer);
 
+	// change all color
 	project._children[0]._children.forEach(function(el, i) {
 		if (el.constructor == Path && el.selectable) {
 			el.fillColor.alpha = 1;
@@ -152,20 +174,11 @@ $('#export-button').unbind('click').bind('click', function() {
 		}
 	});
 
-	var img = document.getElementById('background');
-	var a = $('#background').offset();
-	var b = img.clientWidth;
-	var c = img.clientHeight;
-
-	var svg = project.exportSVG({
-		bounds: new Rectangle(a.left, a.top, b, c)
-	});
-	var ratio = img.naturalWidth/svg.getAttribute('width');
-
-	svg.setAttribute('width', img.naturalWidth);
-	svg.setAttribute('height', img.naturalHeight);
-
+	var svg = project.exportSVG();
+	var ratio = background.width / svg.getAttribute('width');
+	console.log(background.width);
 	svg.setAttribute("transform", "scale(" + ratio + ")");
+
 	var svgString = new XMLSerializer().serializeToString(svg);
 
 	downloadDataUri({
@@ -174,13 +187,31 @@ $('#export-button').unbind('click').bind('click', function() {
 	});
 
 	project.clear();
+
 	project.addLayer(backupLayer);
+
+	backupLayer.insertChild(0, background);
+	backupLayer.insertChildren(1, palettes);
+	backupLayer.insertChildren(2, labels);
+	// palettes.forEach(function(el){backupLayer.addChild(el);});
+	// labels.forEach(function(el){backupLayer.addChild(el);})
+
+
+	console.log(currentColor);
 });
 
 $('#save-button').click(function() {
 	unselect();
 
-	var jsonString = addSelectable(project.exportJSON());
+	var jsonObject = project.exportJSON({ "asString": false });
+	//project._children[0]._children[i]
+	jsonObject[0][1].children.forEach(function(el, i) {
+		if (el[0] == "Path") {
+			el[1].selectable = project._children[0]._children[i].selectable;
+		}
+	});
+
+	var jsonString = JSON.stringify(jsonObject);
 
 	downloadDataUri({
 		data: 'data:application/json,' + encodeURIComponent(jsonString),
@@ -195,12 +226,12 @@ $('#selectedFile')[0].onchange = function(event) {
 }
 
 function onReaderLoad(event) {
-	var obj = JSON.parse(event.target.result);
+	var jsonObject = JSON.parse(event.target.result);
 
 	project.clear();
-	project.importJSON(obj);
+	project.importJSON(jsonObject);
 
-	getFirstLayerChildren(obj).forEach(function(el, i) {
+	jsonObject[0][1].children.forEach(function(el, i) {
 		if (el[1] && project._children[0]._children[i]) {
 			var item = project._children[0]._children[i];
 			item.onMouseDown = onPathMouseDown;
@@ -219,10 +250,6 @@ function downloadDataUri(options) {
 		options.data + '"/></form>').appendTo('body').submit().remove();
 }
 
-function getFirstLayerChildren(obj) {
-	return obj[0][1].children;
-}
-
 function unselect(item) {
 	if (item) {
 		item.selected = false;
@@ -235,7 +262,7 @@ function select(item) {
 	unselect();
 	if (item.selectable) {
 		currentPath = item;
-		currentPath.selected = true;	
+		currentPath.selected = true;
 	}
 }
 
@@ -247,12 +274,22 @@ function unselectAll() {
 	});
 }
 
-function addSelectable(jsonString) {
-	var jsonObject = JSON.parse(jsonString);
-	jsonObject[0][1].children.forEach(function(el) {
+function addSelectableToJSON(jsonObject) {
+	jsonObject[0][1].children.forEach(function(el, i) {
 		if (el[0] == "Path") {
 			el[1].selectable = true;
 		}
 	});
+	console.log(jsonObject[0][1].children);
 	return JSON.stringify(jsonObject);
+}
+
+function addSelectableToLayer(layer) {
+	layer.children.forEach(function(el) {
+		if (el.constructor == Path) {
+			el.selectable = true;
+			el.onMouseDown = onPathMouseDown;
+			el.onMouseDrag = onPathMouseDrag;
+		}
+	});
 }
