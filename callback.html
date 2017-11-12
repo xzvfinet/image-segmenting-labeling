@@ -1,0 +1,20 @@
+<html>
+
+<head>
+	<script type="text/javascript">
+	/**
+	 * call parent window function and close
+	 */
+	function callback() {
+		var code = window.location.href.match(/\?code=(.*)/)[1];
+		console.log(code);
+		window.opener.handler(code);
+		window.close();
+	}
+	</script>
+</head>
+
+<body onload="callback()">
+</body>
+
+</html>

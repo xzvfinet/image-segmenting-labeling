@@ -9,7 +9,6 @@
 	<script type="text/javascript" src="static/js/jquery-3.2.1.min.js"></script>
 	<script type="text/javascript" src="static/js/semantic.min.js"></script>
 	<script type="text/javascript" src="static/js/paper-full.js"></script>
-	<script type="text/javascript" src="static/js/htmlparser.min.js"></script>
 	<script type="text/javascript" src="src/utility.js"></script>
 	<script type="text/paperscript" canvas="mainCanvas" src="src/pMain.js"></script>
 </head>
@@ -66,12 +65,25 @@
 	</div>
 	<canvas id="mainCanvas" resize="true" style="width:100%; height: 100%;"></canvas>
 	<script type="text/javascript">
+	$(document).on('click', '.ui.dropdown', function() {
+		$(this).addClass("loading disabled");
+		window.open('https://github.com/login/oauth/authorize?client_id=' + CLIENT_ID);
+	});
+
 	$('.ui.dropdown').dropdown({
 		onChange: function(text, value, item) {
 			var value = item[0].attributes['value'].nodeValue;
 			setBackground(value);
 		}
 	});
+
+	var CLIENT_ID = "cdf03543a09d3b856a8b";
+	var CORS_SURROGATE = "https://cors-resolver.herokuapp.com/authenticate/";
+	var IMG_URL = "https://api.github.com/repos/xzvfinet/image-segmenting-labeling/contents/static/img/";
+
+	var itemFormat = "<div class='item' value='{0}'>{1}</div>";
+	var directoryList = ['MSC', 'Adipocyte', 'Chondrocyte', 'Osteoblast'];
+	window.href = 'https://github.com/login/oauth/authorize?client_id=' + CLIENT_ID;
 
 	String.prototype.format = function() {
 		a = this;
@@ -81,15 +93,30 @@
 		return a
 	}
 
-	var itemFormat = "<div class='item' value='{0}'>{1}</div>";
-	['MSC', 'Adipocyte', 'Chondrocyte', 'Osteoblast'].forEach(function(name) {
-		$.get("https://api.github.com/repos/xzvfinet/image-segmenting-labeling/contents/static/img/" + name, function(data) {
-			data.forEach(function(el) {
-				$("." + name).append(itemFormat.format(el.download_url, el.name))
+	window.handler = function(userCode) {
+		$.getJSON(CORS_SURROGATE + userCode, function(data) {
+			directoryList.forEach(function(name) {
+				$.ajax({
+					type: 'GET',
+					url: IMG_URL + name,
+					headers: {
+						"Authorization": "token " + data.token
+					},
+					success: function(data) {
+						data.forEach(function(el) {
+							$("." + name).append(itemFormat.format(el.download_url, el.name));
+						});
+						$('.ui.dropdown').removeClass('loading disabled');
+						$(document).unbind('click');
+					},
+					error: function() {
+						$('.ui.dropdown').removeClass('loading disabled');
+						$('.ui.dropdown').addClass('error');
+					}
+				});
 			});
 		});
-
-	});
+	}
 	</script>
 </body>
 
