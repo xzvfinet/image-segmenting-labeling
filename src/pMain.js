@@ -6,6 +6,7 @@ var canvas = document.getElementById("mainCanvas");
 var LABEL_NUM = 4;
 var palettes = [];
 var labels = [];
+var pathList = [];
 
 for (var i = 0; i < LABEL_NUM; ++i) {
 	var color = new Color(getRandomColor());
@@ -48,20 +49,26 @@ view.onMouseDown = function(event) {
 	console.log("view");
 
 	var hitResult = project.hitTest(event.point, hitOptions);
-
 	if (!hitResult || hitResult.item == background) {
-		unselect();
-		currentPath = new Path({
-			segments: [event.point],
-			strokeColor: currentColor + new Color(0, 0, 0, 0.2),
-			strokeWidth: 3,
-			fullySelected: true
-		});
-		currentPath.selected = false;
-		currentPath.selectable = true;
+		if (window.viewMode) {
 
-		currentPath.onMouseDown = onPathMouseDown;
-		currentPath.onMouseDrag = onPathMouseDrag;
+		} else {
+			unselect();
+			currentPath = new Path({
+				segments: [event.point],
+				strokeColor: currentColor + new Color(0, 0, 0, 0.2),
+				strokeWidth: 3,
+				fullySelected: true
+			});
+			if (pathList.indexOf(currentPath) == -1) {
+				pathList.push(currentPath);
+			}
+			currentPath.selected = false;
+			currentPath.selectable = true;
+
+			currentPath.onMouseDown = onPathMouseDown;
+			currentPath.onMouseDrag = onPathMouseDrag;
+		}
 		return;
 	} else if (hitResult.item.selectable) {
 		// currentPath = hitResult.item;
@@ -72,12 +79,15 @@ view.onMouseDown = function(event) {
 
 view.onMouseDrag = function(event) {
 	// view.translatet([100, 0]);
-	if (currentPath) {
-		if (!currentPath.selected) {
+	if (window.viewMode) {
+		background.translate(event.delta);
+		pathList.forEach(function(el) { el.translate(event.delta); });
+	} else {
+		if (currentPath && !currentPath.selected) {
 			currentPath.add(event.point);
-
 		}
 	}
+
 }
 
 view.onMouseUp = function(event) {
@@ -98,17 +108,12 @@ view.onMouseUp = function(event) {
 function onPathMouseDown(event) {
 	console.log("path");
 	select(this);
-	// event.stopPropagation();
-
 }
 
 function onPathMouseDrag(event) {
 	if (currentPath == this) {
-		if (this.selected) {
+		if (this.selected && !window.viewMode) {
 			this.position += event.delta;
-			// event.stopPropagation();
-			// event.stop();
-			// return false;
 		}
 	}
 }
@@ -157,47 +162,59 @@ $('#export-button').unbind('click').bind('click', function() {
 	unselectAll();
 
 	background.remove();
-	palettes.forEach(function(el) { el.remove(); });
-	labels.forEach(function(el) { el.remove(); })
-
-	var backupLayer = project._children[0].clone({ "insert": false });
-	addSelectableToLayer(backupLayer);
-	console.log(backupLayer);
-
-	// change all color
-	project._children[0]._children.forEach(function(el, i) {
-		if (el.constructor == Path && el.selectable) {
-			el.fillColor.alpha = 1;
-			el.strokeColor = el.fillColor;
-		} else {
-			el.visible = false;
-		}
+	palettes.forEach(function(el) {
+		el.remove();
+		el.visible = false;
+	});
+	labels.forEach(function(el) {
+		el.remove();
+		el.visible = false;
 	});
 
-	var svg = project.exportSVG();
+	// backup path
+	var backupPathList = [];
+	pathList.forEach(function(el) { backupPathList.push(el.clone({ "insert": false })); });
+
+	// change all colors to solid
+	pathList.forEach(function(el, i) {
+		el.fillColor.alpha = 1;
+		el.strokeColor = el.fillColor;
+	});
+	pathList = backupPathList;
+
+	// moved position
+	var leftTop = background.position - new Point(background.size / 2);
+	var bound = new Rectangle(leftTop, background.size);
+	console.log(bound);
+
+	// export
+	var svg = project.exportSVG({ bounds: bound });
+
+	// set transform to fit original background size
 	var ratio = background.width / svg.getAttribute('width');
-	console.log(background.width);
 	svg.setAttribute("transform", "scale(" + ratio + ")");
 
+	// download for browser
 	var svgString = new XMLSerializer().serializeToString(svg);
-
 	downloadDataUri({
 		data: 'data:image/svg+xml;base64,' + btoa(svgString),
 		filename: 'export.svg'
 	});
 
+
+	// load
+	var newLayer = new Layer();
+
 	project.clear();
+	project.addLayer(newLayer);
 
-	project.addLayer(backupLayer);
+	palettes.forEach(function(el) { el.visible = true; });
+	labels.forEach(function(el) { el.visible = true; });
 
-	backupLayer.insertChild(0, background);
-	backupLayer.insertChildren(1, palettes);
-	backupLayer.insertChildren(2, labels);
-	// palettes.forEach(function(el){backupLayer.addChild(el);});
-	// labels.forEach(function(el){backupLayer.addChild(el);})
-
-
-	console.log(currentColor);
+	newLayer.addChild(background);
+	newLayer.addChildren(palettes);
+	newLayer.addChildren(labels);
+	newLayer.addChildren(pathList);
 });
 
 $('#save-button').click(function() {
@@ -280,7 +297,6 @@ function addSelectableToJSON(jsonObject) {
 			el[1].selectable = true;
 		}
 	});
-	console.log(jsonObject[0][1].children);
 	return JSON.stringify(jsonObject);
 }
 

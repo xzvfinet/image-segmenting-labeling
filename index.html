@@ -26,6 +26,10 @@
 			</div>
 			<div class="four wide centered column">
 				<button class="ui red button" id="remove-button">Remove</button>
+				<div class="ui toggle checkbox">
+					<input type="checkbox" name="public">
+					<label>View</label>
+				</div>
 			</div>
 			<div class="right aligned right floated four wide column">
 				<!-- <select class="ui dropdown" id="image-select">
@@ -65,6 +69,13 @@
 	</div>
 	<canvas id="mainCanvas" resize="true" style="width:100%; height: 100%;"></canvas>
 	<script type="text/javascript">
+	var CLIENT_ID = "cdf03543a09d3b856a8b";
+	var CORS_SURROGATE = "https://cors-resolver.herokuapp.com/authenticate/";
+	var IMG_URL = "https://api.github.com/repos/xzvfinet/image-segmenting-labeling/contents/static/img/";
+
+	var itemFormat = "<div class='item' value='{0}'>{1}</div>";
+	var directoryList = ['MSC', 'Adipocyte', 'Chondrocyte', 'Osteoblast'];
+
 	$(document).on('click', '.ui.dropdown', function() {
 		$(this).addClass("loading disabled");
 		window.open('https://github.com/login/oauth/authorize?client_id=' + CLIENT_ID);
@@ -77,21 +88,15 @@
 		}
 	});
 
-	var CLIENT_ID = "cdf03543a09d3b856a8b";
-	var CORS_SURROGATE = "https://cors-resolver.herokuapp.com/authenticate/";
-	var IMG_URL = "https://api.github.com/repos/xzvfinet/image-segmenting-labeling/contents/static/img/";
-
-	var itemFormat = "<div class='item' value='{0}'>{1}</div>";
-	var directoryList = ['MSC', 'Adipocyte', 'Chondrocyte', 'Osteoblast'];
-	window.href = 'https://github.com/login/oauth/authorize?client_id=' + CLIENT_ID;
-
-	String.prototype.format = function() {
-		a = this;
-		for (k in arguments) {
-			a = a.replace("{" + k + "}", arguments[k])
+	window.viewMode = false;
+	$('.ui.checkbox').checkbox({
+		onChecked: function() {
+			window.viewMode = true;
+		},
+		onUnchecked: function() {
+			window.viewMode = false;
 		}
-		return a
-	}
+	});
 
 	window.handler = function(userCode) {
 		$.getJSON(CORS_SURROGATE + userCode, function(data) {
@@ -116,6 +121,14 @@
 				});
 			});
 		});
+	}
+
+	String.prototype.format = function() {
+		a = this;
+		for (k in arguments) {
+			a = a.replace("{" + k + "}", arguments[k])
+		}
+		return a
 	}
 	</script>
 </body>
